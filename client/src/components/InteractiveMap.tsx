@@ -7,13 +7,15 @@ interface InteractiveMapProps {
   lng?: number;
   address?: string;
   companyName?: string;
+  mapLink?: string;
 }
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
-  lat = 50.3660,
-  lng = 30.5600,
-  address = 'м. Київ, вул. Промислова, 14',
-  companyName = 'Завод «MAG» — Переробка шин та гумотехніка'
+  lat = 49.0107083,
+  lng = 33.6546825,
+  address = 'Полтавська обл., м. Горішні Плавні',
+  companyName = 'ВТП «МАГ» — Завод з переробки шин та гумотехніки',
+  mapLink = 'https://maps.app.goo.gl/qoLLNRUT1kcWpUcS7'
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -29,7 +31,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     // Initialize Leaflet map
     const map = L.map(mapContainerRef.current, {
       center: [lat, lng],
-      zoom: 15,
+      zoom: 16,
       zoomControl: true,
       scrollWheelZoom: false,
     });
@@ -109,7 +111,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const googleMapsUrl = mapLink || 'https://maps.app.goo.gl/qoLLNRUT1kcWpUcS7';
   const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
 
   return (
@@ -161,9 +163,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       <div className="p-3 bg-slate-950 text-slate-400 text-xs flex items-center justify-between border-t border-slate-800/80">
         <span className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          КПП №1: Промислова зона «Корчувате», зручний розворот для вантажівок
+          КПП: м. Горішні Плавні, зручний під'їзд та розворот для вантажівок
         </span>
-        <span className="hidden sm:inline text-slate-400">Цілодобовий заїзд на розвантаження шин</span>
+        <span className="hidden sm:inline text-slate-400">Цілодобовий прийом шин на утилізацію 24/7</span>
       </div>
     </div>
   );

@@ -232,27 +232,27 @@ function seedSiteSettings() {
   // Contacts Page Settings
   if (!getSetting.get('contacts')) {
     const defaultContacts = {
-      companyName: "ТОВ «ЗАВОД ПЕРЕРОБКИ ШИН ТА ГУМОТЕХНІКИ МАГ»",
-      address: "Україна, м. Київ, вул. Промислова, 14",
-      landmark: "Промзона «Корчувате», заїзд для великогабаритного транспорту з Столичного шосе",
+      companyName: "ВТП «МАГ» — Виробничо-Технічне Підприємство МАГ",
+      address: "Україна, Полтавська обл., м. Горішні Плавні",
+      landmark: "Промзона, прямий заїзд для вантажного транспорту та фур",
       schedule: "Понеділок — П'ятниця: 08:00 — 18:00. Прийом шин на утилізацію: Цілодобово 24/7.",
       commercialDepartment: {
         title: "Комерційний відділ (Замовлення продукції)",
-        phone1: "+38 (044) 390-45-70",
-        phone2: "+38 (067) 540-22-11",
+        phone1: "+38 (067) 535-11-12",
+        phone2: "+38 (066) 261-13-14",
         email: "sales@mag-plant.com.ua",
         contactPerson: "Олександр Коваленко (Керівник збуту)"
       },
       recyclingDepartment: {
         title: "Відділ прийому сировини та утилізації шин",
-        phone: "+38 (050) 880-33-44",
+        phone: "+38 (067) 532-74-23",
         email: "eco@mag-plant.com.ua",
         contactPerson: "Сергій Мельник (Головний технолог)"
       },
       coordinates: {
-        lat: 50.3660,
-        lng: 30.5600,
-        zoom: 15
+        lat: 49.0107083,
+        lng: 33.6546825,
+        zoom: 16
       },
       requisites: {
         edrpou: "41893201",

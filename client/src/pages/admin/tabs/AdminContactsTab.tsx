@@ -127,7 +127,7 @@ export const AdminContactsTab: React.FC<AdminContactsTabProps> = ({ onNotify }) 
               <input
                 type="number"
                 step="0.0001"
-                value={data.coordinates?.lat || 50.3660}
+                value={data.coordinates?.lat || 49.0107}
                 onChange={(e) => setData({
                   ...data,
                   coordinates: { ...data.coordinates, lat: parseFloat(e.target.value) || 0 }
@@ -140,7 +140,7 @@ export const AdminContactsTab: React.FC<AdminContactsTabProps> = ({ onNotify }) 
               <input
                 type="number"
                 step="0.0001"
-                value={data.coordinates?.lng || 30.5600}
+                value={data.coordinates?.lng || 33.6547}
                 onChange={(e) => setData({
                   ...data,
                   coordinates: { ...data.coordinates, lng: parseFloat(e.target.value) || 0 }
