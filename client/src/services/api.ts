@@ -132,10 +132,11 @@ const defaultProducts: Product[] = [
     slug: "paleta-blochna-gumova-mag-heavy-block-1200x800",
     name: "Палета блочна гумова MAG Heavy Block 1200x800",
     category: "Гумові палети та блоки",
-    image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80",
+    image: "./ztp-mag-promo.jpg",
     gallery: [
-      "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80"
+      "./ztp-mag-promo.jpg",
+      "./gumova-plytka-500x500.jpg",
+      "./gumovyi-lyuk.jpg"
     ],
     short_desc: "Надміцна монолітна блочна гумова палета з інтегрованими сталевими напрямними для вилкових навантажувачів.",
     description: "Блочна палета MAG Heavy Block виготовлена методом гарячого компресійного пресування під тиском 500 тонн. Спеціально розроблена для зберігання та транспортування надважких вантажів у суворих промислових умовах: металургія, хімічні заводи, порти та відкриті майданчики.\n\nНа відміну від дерев'яних або пластикових аналогів, гумова блочна палета не розколюється при падінні вантажу, повністю стійка до лугів, мастил та дорожніх реагентів. Інтегровані сталеві ребра жорсткості виключають деформацію при тривалому статичному навантаженні до 6500 кг.",
@@ -607,14 +608,22 @@ export const api = {
   initStorage: async () => {
     if (typeof window === 'undefined') return;
     try {
-      const existing = localStorage.getItem('mag_products');
-      if (!existing) {
-        const fromIDB = await idbLoad<Product[]>('mag_products');
-        if (fromIDB && Array.isArray(fromIDB) && fromIDB.length > 0) {
-          localStorage.setItem('mag_products', JSON.stringify(fromIDB));
-        } else {
-          localStorage.setItem('mag_products', JSON.stringify(defaultProducts));
-          idbSave('mag_products', defaultProducts).catch(() => {});
+      const version = localStorage.getItem('mag_catalog_version');
+      if (version !== 'v2') {
+        // Automatically sync updated factory photos into storage
+        localStorage.setItem('mag_products', JSON.stringify(defaultProducts));
+        localStorage.setItem('mag_catalog_version', 'v2');
+        idbSave('mag_products', defaultProducts).catch(() => {});
+      } else {
+        const existing = localStorage.getItem('mag_products');
+        if (!existing) {
+          const fromIDB = await idbLoad<Product[]>('mag_products');
+          if (fromIDB && Array.isArray(fromIDB) && fromIDB.length > 0) {
+            localStorage.setItem('mag_products', JSON.stringify(fromIDB));
+          } else {
+            localStorage.setItem('mag_products', JSON.stringify(defaultProducts));
+            idbSave('mag_products', defaultProducts).catch(() => {});
+          }
         }
       }
     } catch (_) {}
