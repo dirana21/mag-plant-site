@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { MapPin, Navigation, ExternalLink, Copy, Check } from 'lucide-react';
 
@@ -19,16 +19,18 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
+  const [viewMode, setViewMode] = useState<'google' | 'osm'>('google');
 
   useEffect(() => {
-    if (!mapContainerRef.current) return;
+    if (viewMode !== 'osm' || !mapContainerRef.current) return;
 
     if (mapInstanceRef.current) {
       mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
     }
 
-    // Initialize Leaflet map
+    // Initialize Leaflet map with free OpenStreetMap tiles (no API key required)
     const map = L.map(mapContainerRef.current, {
       center: [lat, lng],
       zoom: 16,
@@ -38,9 +40,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     mapInstanceRef.current = map;
 
-    // High tech / modern CartoDB Dark Matter or OpenStreetMap tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>, &copy; OpenStreetMap',
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
       maxZoom: 19,
     }).addTo(map);
 
@@ -103,7 +104,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [lat, lng, address, companyName]);
+  }, [lat, lng, address, companyName, viewMode]);
 
   const copyCoords = () => {
     navigator.clipboard.writeText(`${lat}, ${lng}`);
@@ -113,11 +114,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   const googleMapsUrl = mapLink || 'https://maps.app.goo.gl/qoLLNRUT1kcWpUcS7';
   const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+  const googleEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=uk&z=16&output=embed`;
 
   return (
     <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl">
       {/* Top Map Bar */}
-      <div className="p-4 bg-slate-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-4 bg-slate-950/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="text-xs font-semibold text-white">
@@ -125,8 +127,36 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* View mode toggle + External navigation */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Mode Switcher */}
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('google')}
+              className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                viewMode === 'google'
+                  ? 'bg-emerald-500 text-black shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Google Maps
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('osm')}
+              className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                viewMode === 'osm'
+                  ? 'bg-emerald-500 text-black shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Схема MAG
+            </button>
+          </div>
+
           <button
+            type="button"
             onClick={copyCoords}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white text-xs border border-slate-800 transition-colors"
           >
@@ -157,7 +187,18 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       </div>
 
       {/* Map Viewport */}
-      <div ref={mapContainerRef} className="w-full h-[400px] sm:h-[480px] z-10" />
+      {viewMode === 'google' ? (
+        <iframe
+          title="Google Maps Location"
+          src={googleEmbedUrl}
+          className="w-full h-[400px] sm:h-[480px] border-0"
+          loading="lazy"
+          allowFullScreen
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      ) : (
+        <div ref={mapContainerRef} className="w-full h-[400px] sm:h-[480px] z-10" />
+      )}
 
       {/* Map Footer Note */}
       <div className="p-3 bg-slate-950 text-slate-400 text-xs flex items-center justify-between border-t border-slate-800/80">
@@ -170,3 +211,4 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     </div>
   );
 };
+
