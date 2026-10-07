@@ -1,9 +1,208 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Play, RotateCcw, ArrowRight, CheckCircle2, ShieldCheck, Flame, Volume2, VolumeX } from 'lucide-react';
+
+type PressStage = 'IDLE' | 'COMPRESSING' | 'VULCANIZING' | 'OPENING' | 'FINISHED';
 
 export const IndustrialHeroCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hintText, setHintText] = useState<'idle' | 'pressing' | 'struck'>('idle');
-  const [pressedCount, setPressedCount] = useState(0);
+  const [stage, setStage] = useState<PressStage>('IDLE');
+  const [progress, setProgress] = useState(0); // 0 to 100%
+  const [tonnage, setTonnage] = useState(0); // 0 to 500 Tons
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // References to keep sync inside requestAnimationFrame
+  const stageRef = useRef<PressStage>('IDLE');
+  const progressRef = useRef(0);
+  const tonnageRef = useRef(0);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  // Interval & timeout handles
+  const compressTimerRef = useRef<any>(null);
+  const vulcanizeTimerRef = useRef<any>(null);
+  const finishTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
+  // Clean up any active timers on unmount
+  useEffect(() => {
+    return () => {
+      if (compressTimerRef.current) clearInterval(compressTimerRef.current);
+      if (vulcanizeTimerRef.current) clearInterval(vulcanizeTimerRef.current);
+      if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
+    };
+  }, []);
+
+  // Web Audio Context for realistic deep mechanical hydraulics & steam
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const initAudio = () => {
+    if (!audioCtxRef.current) {
+      const AudioClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioClass) audioCtxRef.current = new AudioClass();
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+  };
+
+  const playHydraulicHum = () => {
+    if (!soundEnabledRef.current || !audioCtxRef.current) return;
+    try {
+      const ctx = audioCtxRef.current;
+      // Deep low-frequency hydraulic pump motor
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(45, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(55, ctx.currentTime + 1.2);
+
+      // Low pass filter to remove harshness, leaving deep rumble
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(110, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.01, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.3);
+      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 1.2);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 1.25);
+    } catch (_) {}
+  };
+
+  const playHydraulicLock = () => {
+    if (!soundEnabledRef.current || !audioCtxRef.current) return;
+    try {
+      const ctx = audioCtxRef.current;
+      // Deep solid low-pitch metallic thud upon 500-ton die closure
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(70, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(25, ctx.currentTime + 0.3);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(120, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.32);
+    } catch (_) {}
+  };
+
+  const playPneumaticSteam = () => {
+    if (!soundEnabledRef.current || !audioCtxRef.current) return;
+    try {
+      const ctx = audioCtxRef.current;
+      const bufferSize = ctx.sampleRate * 0.9;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1200, ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.8);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.85);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start();
+    } catch (_) {}
+  };
+
+  // Launch the Pressing Sequence
+  const handleStartPressing = () => {
+    if (stage !== 'IDLE' && stage !== 'FINISHED') return;
+    initAudio();
+    playHydraulicHum();
+
+    setStage('COMPRESSING');
+    stageRef.current = 'COMPRESSING';
+    setProgress(0);
+    progressRef.current = 0;
+    setTonnage(0);
+    tonnageRef.current = 0;
+
+    if (compressTimerRef.current) clearInterval(compressTimerRef.current);
+    if (vulcanizeTimerRef.current) clearInterval(vulcanizeTimerRef.current);
+    if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
+
+    // 1. Descending & Compressing (1.2 seconds)
+    let currentT = 0;
+    compressTimerRef.current = setInterval(() => {
+      currentT += 35;
+      if (currentT >= 500) {
+        currentT = 500;
+        clearInterval(compressTimerRef.current);
+        setTonnage(500);
+        tonnageRef.current = 500;
+        setStage('VULCANIZING');
+        stageRef.current = 'VULCANIZING';
+        playHydraulicLock();
+
+        // 2. Vulcanizing Delay (1.8 seconds with progress 0 -> 100%)
+        let p = 0;
+        vulcanizeTimerRef.current = setInterval(() => {
+          p += 5;
+          setProgress(p);
+          progressRef.current = p;
+          if (p >= 100) {
+            clearInterval(vulcanizeTimerRef.current);
+            setStage('OPENING');
+            stageRef.current = 'OPENING';
+            playPneumaticSteam();
+
+            // 3. Opening & Product Release (1.0 second)
+            finishTimeoutRef.current = setTimeout(() => {
+              setStage('FINISHED');
+              stageRef.current = 'FINISHED';
+            }, 1000);
+          }
+        }, 85);
+      } else {
+        setTonnage(currentT);
+        tonnageRef.current = currentT;
+      }
+    }, 80);
+  };
+
+  const handleReset = () => {
+    if (compressTimerRef.current) clearInterval(compressTimerRef.current);
+    if (vulcanizeTimerRef.current) clearInterval(vulcanizeTimerRef.current);
+    if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
+
+    setStage('IDLE');
+    stageRef.current = 'IDLE';
+    setProgress(0);
+    progressRef.current = 0;
+    setTonnage(0);
+    tonnageRef.current = 0;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -22,76 +221,7 @@ export const IndustrialHeroCanvas: React.FC = () => {
     };
     window.addEventListener('resize', handleResize);
 
-    // Audio Context for Industrial SFX (Hydraulic pump + Impact thud + Steam hiss)
-    let audioCtx: AudioContext | null = null;
-    const initAudio = () => {
-      if (!audioCtx) {
-        const AudioClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioClass) audioCtx = new AudioClass();
-      }
-      if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-    };
-
-    const playImpactSound = () => {
-      if (!audioCtx) return;
-      try {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(140, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.35);
-
-        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.35);
-
-        // Steam hiss
-        const bufferSize = audioCtx.sampleRate * 0.4;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.4));
-        }
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 1800;
-        const noiseGain = audioCtx.createGain();
-        noiseGain.gain.setValueAtTime(0.25, audioCtx.currentTime + 0.05);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.45);
-        noise.connect(filter);
-        filter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
-        noise.start(audioCtx.currentTime + 0.05);
-      } catch (_) {}
-    };
-
-    // State Variables for Interactive Press
-    let isUserPressing = false;
-    let compressionProgress = 0; // 0 = rest, 1 = fully compressed
-    let targetProgress = 0;
-    let hasTriggeredImpact = false;
-    let shakeIntensity = 0;
-    let flashIntensity = 0;
-
-    // Sparks & Steam systems
-    interface Spark {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      color: string;
-      size: number;
-      alpha: number;
-      life: number;
-    }
+    // Steam particles
     interface Steam {
       x: number;
       y: number;
@@ -100,474 +230,308 @@ export const IndustrialHeroCanvas: React.FC = () => {
       radius: number;
       alpha: number;
     }
+    const steamList: Steam[] = [];
 
-    const sparks: Spark[] = [];
-    const steamClouds: Steam[] = [];
-
-    // Mouse & Touch events
-    let mouse = { x: width / 2, y: height / 2, active: false };
-
-    const startInteraction = (clientX: number, clientY: number) => {
-      initAudio();
-      isUserPressing = true;
-      hasTriggeredImpact = false;
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = clientX - rect.left;
-      mouse.y = clientY - rect.top;
-      mouse.active = true;
-      setHintText('pressing');
-    };
-
-    const moveInteraction = (clientX: number, clientY: number) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = clientX - rect.left;
-      mouse.y = clientY - rect.top;
-      mouse.active = true;
-
-      if (isUserPressing) {
-        const cy = height * 0.5;
-        // Drag calculation relative to press center
-        const delta = (mouse.y - (cy - 120)) / 140;
-        targetProgress = Math.min(1.0, Math.max(0.2, delta));
-      }
-    };
-
-    const endInteraction = () => {
-      if (isUserPressing) {
-        isUserPressing = false;
-        targetProgress = 0;
-
-        // Emit steam on release
-        const cx = width > 768 ? width * 0.58 : width * 0.5;
-        const cy = height * 0.5;
-        for (let i = 0; i < 18; i++) {
-          steamClouds.push({
-            x: cx + (Math.random() - 0.5) * 80,
-            y: cy + (Math.random() - 0.5) * 30,
-            vx: (Math.random() - 0.5) * 2.5,
-            vy: -Math.random() * 2.5 - 1.2,
-            radius: Math.random() * 12 + 6,
-            alpha: 0.6
-          });
-        }
-        setHintText('idle');
-      }
-    };
-
-    // Listeners for Mouse
-    const onMouseDown = (e: MouseEvent) => startInteraction(e.clientX, e.clientY);
-    const onMouseMove = (e: MouseEvent) => moveInteraction(e.clientX, e.clientY);
-    const onMouseUp = () => endInteraction();
-    const onMouseLeave = () => {
-      mouse.active = false;
-      endInteraction();
-    };
-
-    // Listeners for Touch
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        startInteraction(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        moveInteraction(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    };
-    const onTouchEnd = () => endInteraction();
-
-    canvas.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mouseleave', onMouseLeave);
-
-    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchend', onTouchEnd);
-
-    // Particles system: Rubber Crumb & Steel Fibers
-    const PARTICLE_COUNT = 85;
-    interface Particle {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      radius: number;
-      color: string;
-      isSteel: boolean;
-      angle: number;
-      speed: number;
-      distFromCenter: number;
-    }
-
-    const particles: Particle[] = [];
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const isSteel = Math.random() < 0.28;
-      const dist = 40 + Math.random() * (Math.min(width, height) * 0.44);
-      const angle = Math.random() * Math.PI * 2;
-      particles.push({
-        x: width * 0.55 + Math.cos(angle) * dist,
-        y: height * 0.5 + Math.sin(angle) * dist,
-        vx: (Math.random() - 0.5) * 0.8,
-        vy: (Math.random() - 0.5) * 0.8,
-        radius: isSteel ? 2 : Math.random() * 2.8 + 1.2,
-        color: isSteel ? '#38bdf8' : Math.random() > 0.4 ? '#10b981' : '#64748b',
-        isSteel,
-        angle,
-        speed: (Math.random() * 0.006 + 0.002) * (Math.random() > 0.5 ? 1 : -1),
-        distFromCenter: dist
+    // Crumb particles in mold
+    const crumbCount = 35;
+    const crumbs: { x: number; y: number; r: number; color: string }[] = [];
+    for (let i = 0; i < crumbCount; i++) {
+      crumbs.push({
+        x: (Math.random() - 0.5) * 80,
+        y: (Math.random() - 0.5) * 20,
+        r: Math.random() * 3 + 1.5,
+        color: Math.random() > 0.3 ? '#334155' : '#10b981'
       });
     }
 
     let time = 0;
+    let pistonY = 0; // Current piston vertical offset
 
     const render = () => {
       time += 0.02;
       ctx.clearRect(0, 0, width, height);
 
-      // Handle Smooth Compression Dynamics
-      if (isUserPressing) {
-        targetProgress = Math.max(targetProgress, 0.45); // minimum engagement on click
-        compressionProgress += (targetProgress - compressionProgress) * 0.22;
-      } else {
-        // Idle gentle breathing motion
-        const idleVal = (Math.sin(time * 1.5) + 1) * 0.08;
-        compressionProgress += (idleVal - compressionProgress) * 0.08;
+      const cx = width > 768 ? width * 0.56 : width * 0.5;
+      const cy = height * 0.46;
+
+      const currentStage = stageRef.current;
+
+      // Calculate piston gap according to active stage
+      let targetPistonGap = 85; // Rest position gap
+      if (currentStage === 'COMPRESSING') {
+        targetPistonGap = 85 - (tonnageRef.current / 500) * 65; // descend down
+      } else if (currentStage === 'VULCANIZING') {
+        targetPistonGap = 20; // locked closed under 500T!
+      } else if (currentStage === 'OPENING' || currentStage === 'FINISHED') {
+        targetPistonGap = 85; // piston opens back up
       }
 
-      // Check Impact Trigger (Peak 500 Tons Strike)
-      if (compressionProgress > 0.88 && !hasTriggeredImpact) {
-        hasTriggeredImpact = true;
-        shakeIntensity = 10;
-        flashIntensity = 1.0;
-        playImpactSound();
-        setHintText('struck');
-        setPressedCount(prev => prev + 1);
+      pistonY += (targetPistonGap - pistonY) * 0.14;
 
-        const cx = width > 768 ? width * 0.58 : width * 0.5;
-        const cy = height * 0.5;
+      // 1. Background Radial Lighting
+      const bgGlow = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.min(width, height) * 0.48);
+      if (currentStage === 'VULCANIZING') {
+        bgGlow.addColorStop(0, 'rgba(245, 158, 11, 0.22)'); // Hot thermal orange
+        bgGlow.addColorStop(0.5, 'rgba(16, 185, 129, 0.15)');
+      } else if (currentStage === 'FINISHED') {
+        bgGlow.addColorStop(0, 'rgba(16, 185, 129, 0.25)'); // Success emerald
+        bgGlow.addColorStop(0.5, 'rgba(15, 23, 42, 0.05)');
+      } else {
+        bgGlow.addColorStop(0, 'rgba(16, 185, 129, 0.12)');
+        bgGlow.addColorStop(0.5, 'rgba(15, 23, 42, 0.05)');
+      }
+      bgGlow.addColorStop(1, 'rgba(11, 15, 23, 0)');
+      ctx.fillStyle = bgGlow;
+      ctx.fillRect(0, 0, width, height);
 
-        // Spawn Hot Sparks (Metal cord & molten vulcanization)
-        for (let i = 0; i < 45; i++) {
-          const sparkAngle = Math.random() * Math.PI * 2;
-          const sparkSpeed = Math.random() * 7 + 3;
-          sparks.push({
-            x: cx + (Math.random() - 0.5) * 60,
-            y: cy,
-            vx: Math.cos(sparkAngle) * sparkSpeed,
-            vy: Math.sin(sparkAngle) * sparkSpeed,
-            color: Math.random() > 0.3 ? '#34d399' : '#38bdf8',
-            size: Math.random() * 3 + 1.5,
-            alpha: 1.0,
-            life: Math.random() * 25 + 15
+      // 2. Rotating Tread Halo
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(time * 0.2);
+      ctx.strokeStyle = currentStage === 'VULCANIZING' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(52, 211, 153, 0.35)';
+      ctx.lineWidth = 1.5;
+      const treadCount = 28;
+      const outerR = 175;
+      const innerR = 162;
+      ctx.beginPath();
+      for (let i = 0; i < treadCount; i++) {
+        const a1 = (i / treadCount) * Math.PI * 2;
+        const a2 = ((i + 0.5) / treadCount) * Math.PI * 2;
+        ctx.lineTo(Math.cos(a1) * outerR, Math.sin(a1) * outerR);
+        ctx.lineTo(Math.cos(a2) * innerR, Math.sin(a2) * innerR);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. Draw The 500-Ton Hydraulic Press Machinery
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      // Heavy Press Column Pillars (left and right steel columns)
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1;
+
+      // Left Column
+      ctx.beginPath();
+      ctx.roundRect(-105, -150, 22, 300, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Right Column
+      ctx.beginPath();
+      ctx.roundRect(83, -150, 22, 300, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Heavy Top Header Crossbeam
+      const beamGrad = ctx.createLinearGradient(-110, -150, 110, -110);
+      beamGrad.addColorStop(0, '#334155');
+      beamGrad.addColorStop(0.5, '#1e293b');
+      beamGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = beamGrad;
+      ctx.strokeStyle = '#64748b';
+      ctx.beginPath();
+      ctx.roundRect(-115, -160, 230, 32, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Central Hydraulic Cylinder (Stationary housing at top)
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-28, -128, 56, 45);
+
+      // Hydraulic Moving Shaft (moves downward)
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-18, -pistonY - 60, 36, 50);
+
+      // MOVING TOP DIE PLATE (Piston Head)
+      const dieGrad = ctx.createLinearGradient(-75, -pistonY, 75, -pistonY + 24);
+      dieGrad.addColorStop(0, '#334155');
+      dieGrad.addColorStop(1, '#0f172a');
+
+      ctx.fillStyle = dieGrad;
+      ctx.strokeStyle = currentStage === 'VULCANIZING' ? '#f59e0b' : '#10b981';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-75, -pistonY - 24, 150, 24, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Pressure Heat Glow when Vulcanizing
+      if (currentStage === 'VULCANIZING') {
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = '#fbbf24';
+        ctx.strokeRect(-72, -pistonY - 2, 144, 2);
+        ctx.shadowBlur = 0;
+      }
+
+      // BOTTOM STATIONARY MOLD BED
+      ctx.fillStyle = dieGrad;
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-85, 30, 170, 30, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // 4. WHAT IS INSIDE THE MOLD?
+      // A) Before or during compression: Raw Rubber Crumb + Steel Insert
+      if (currentStage === 'IDLE' || currentStage === 'COMPRESSING') {
+        // Draw uncompressed crumb particles
+        crumbs.forEach(c => {
+          ctx.beginPath();
+          ctx.arc(c.x, 15 + c.y * (pistonY / 85), c.r, 0, Math.PI * 2);
+          ctx.fillStyle = c.color;
+          ctx.fill();
+        });
+
+        // Steel reinforcement insert sitting in mold
+        ctx.fillStyle = '#94a3b8';
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(-35, 12, 70, 8);
+        ctx.strokeRect(-35, 12, 70, 8);
+      }
+
+      // B) During Vulcanizing: Hot Molten Mass in Mold
+      if (currentStage === 'VULCANIZING') {
+        ctx.fillStyle = '#b45309'; // Red-hot rubber
+        ctx.beginPath();
+        ctx.roundRect(-55, -pistonY, 110, pistonY + 30, 4);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a'; // Glowing core
+        ctx.fillRect(-25, 0, 50, 6);
+
+        // Spawn thermal steam sparks from sides
+        if (Math.random() < 0.4) {
+          steamList.push({
+            x: cx + (Math.random() > 0.5 ? -70 : 70),
+            y: cy + 5,
+            vx: (Math.random() - 0.5) * 3,
+            vy: -Math.random() * 2 - 1,
+            radius: Math.random() * 8 + 4,
+            alpha: 0.6
           });
         }
       }
 
-      // Screen Shake application
-      let shakeX = 0;
-      let shakeY = 0;
-      if (shakeIntensity > 0) {
-        shakeX = (Math.random() - 0.5) * shakeIntensity;
-        shakeY = (Math.random() - 0.5) * shakeIntensity;
-        shakeIntensity *= 0.85;
-        if (shakeIntensity < 0.2) shakeIntensity = 0;
-      }
+      // C) When Finished: THE FINISHED PRODUCT! (MAG Heavy Block Pallet)
+      if (currentStage === 'OPENING' || currentStage === 'FINISHED') {
+        // Render detailed finished rubber pallet
+        ctx.save();
+        // Subtle hover float when finished
+        const floatOffset = currentStage === 'FINISHED' ? Math.sin(time * 2) * 4 : 0;
+        ctx.translate(0, floatOffset);
 
-      ctx.save();
-      ctx.translate(shakeX, shakeY);
+        // Pallet main deck (dense vulcanized black rubber)
+        const palletGrad = ctx.createLinearGradient(-60, 5, 60, 25);
+        palletGrad.addColorStop(0, '#1e293b');
+        palletGrad.addColorStop(0.5, '#0f172a');
+        palletGrad.addColorStop(1, '#1e293b');
 
-      const cx = width > 768 ? width * 0.58 : width * 0.5;
-      const cy = height * 0.5;
+        ctx.fillStyle = palletGrad;
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#10b981';
+        ctx.shadowBlur = 15;
 
-      // 1. Subtle Radial Glow Background
-      const glowColor = hasTriggeredImpact
-        ? 'rgba(52, 211, 153, 0.25)'
-        : 'rgba(16, 185, 129, 0.12)';
-      const radialGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.min(width, height) * 0.48);
-      radialGrad.addColorStop(0, glowColor);
-      radialGrad.addColorStop(0.5, 'rgba(15, 23, 42, 0.05)');
-      radialGrad.addColorStop(1, 'rgba(11, 15, 23, 0)');
-      ctx.fillStyle = radialGrad;
-      ctx.fillRect(0, 0, width, height);
-
-      // Flash Light Overlay
-      if (flashIntensity > 0) {
-        ctx.fillStyle = `rgba(52, 211, 153, ${flashIntensity * 0.35})`;
-        ctx.fillRect(0, 0, width, height);
-        flashIntensity *= 0.88;
-      }
-
-      // 2. Heavy Industrial Vulcanization Press Guide Lines
-      ctx.save();
-      ctx.lineWidth = 1;
-      [140, 200, 260].forEach((r, idx) => {
+        // Top deck slab
         ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = idx === 1 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(51, 65, 85, 0.25)';
-        ctx.setLineDash(idx === 1 ? [6, 6] : [4, 8]);
-        ctx.stroke();
-      });
-      ctx.setLineDash([]);
-      ctx.restore();
-
-      // 3. Rotating Tire Tread Ring
-      const treadTeeth = 32;
-      const outerR = 195;
-      const innerR = 180;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(time * 0.25);
-
-      ctx.beginPath();
-      for (let i = 0; i < treadTeeth; i++) {
-        const theta1 = (i / treadTeeth) * Math.PI * 2;
-        const theta2 = ((i + 0.45) / treadTeeth) * Math.PI * 2;
-        const theta3 = ((i + 0.5) / treadTeeth) * Math.PI * 2;
-        const theta4 = ((i + 0.95) / treadTeeth) * Math.PI * 2;
-
-        ctx.lineTo(Math.cos(theta1) * outerR, Math.sin(theta1) * outerR);
-        ctx.lineTo(Math.cos(theta2) * outerR, Math.sin(theta2) * outerR);
-        ctx.lineTo(Math.cos(theta3) * innerR, Math.sin(theta3) * innerR);
-        ctx.lineTo(Math.cos(theta4) * innerR, Math.sin(theta4) * innerR);
-      }
-      ctx.closePath();
-      ctx.strokeStyle = hasTriggeredImpact ? 'rgba(52, 211, 153, 0.8)' : 'rgba(52, 211, 153, 0.4)';
-      ctx.lineWidth = hasTriggeredImpact ? 2.5 : 2;
-      ctx.stroke();
-      ctx.restore();
-
-      // 4. Hydraulic Press Piston & Bed
-      // Gap distance between top piston and bottom bed
-      // Rest gap = 75px, Compressed gap = 16px!
-      const currentGap = 75 - compressionProgress * 55;
-
-      ctx.save();
-      ctx.translate(cx, cy);
-
-      const pressGrad = ctx.createLinearGradient(-60, -currentGap, 60, currentGap);
-      pressGrad.addColorStop(0, '#1e293b');
-      pressGrad.addColorStop(0.5, '#334155');
-      pressGrad.addColorStop(1, '#0f172a');
-
-      // Top Piston Plate (moves downward with user interaction!)
-      ctx.fillStyle = pressGrad;
-      ctx.strokeStyle = isUserPressing ? '#34d399' : '#10b981';
-      ctx.lineWidth = isUserPressing ? 2.5 : 1.5;
-      ctx.shadowColor = isUserPressing ? '#10b981' : 'transparent';
-      ctx.shadowBlur = isUserPressing ? 15 : 0;
-
-      ctx.beginPath();
-      ctx.roundRect(-65, -currentGap - 22, 130, 22, 5);
-      ctx.fill();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Heavy Hydraulic Shaft Piston Cylinder
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(-18, -currentGap - 80, 36, 60);
-
-      // Interactive Grip Chevron on top piston
-      ctx.strokeStyle = '#34d399';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-15, -currentGap - 11);
-      ctx.lineTo(0, -currentGap - 4);
-      ctx.lineTo(15, -currentGap - 11);
-      ctx.stroke();
-
-      // Bottom Vulcanization Mold Bed
-      ctx.fillStyle = pressGrad;
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(-65, currentGap, 130, 22, 5);
-      ctx.fill();
-      ctx.stroke();
-
-      // The Compressed Rubber Block Forming Between Pistons
-      const blockHeight = currentGap * 2 - 8;
-      const blockGrad = ctx.createLinearGradient(-45, -currentGap + 5, 45, currentGap - 5);
-      if (hasTriggeredImpact) {
-        blockGrad.addColorStop(0, '#34d399');
-        blockGrad.addColorStop(0.5, '#059669');
-        blockGrad.addColorStop(1, '#10b981');
-      } else {
-        blockGrad.addColorStop(0, 'rgba(16, 185, 129, 0.85)');
-        blockGrad.addColorStop(0.5, 'rgba(5, 150, 105, 0.95)');
-        blockGrad.addColorStop(1, 'rgba(16, 185, 129, 0.85)');
-      }
-
-      ctx.fillStyle = blockGrad;
-      ctx.beginPath();
-      ctx.roundRect(-48, -currentGap + 6, 96, blockHeight, 6);
-      ctx.fill();
-
-      // Embedded Steel Core Inside Rubber
-      ctx.fillStyle = '#f8fafc';
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = hasTriggeredImpact ? 16 : 8;
-      ctx.fillRect(-30, -5, 60, 10);
-      ctx.shadowBlur = 0;
-
-      // MAG PRESS label on core
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(hasTriggeredImpact ? 'MAG 500T ★' : 'MAG PRESS', 0, 0);
-
-      ctx.restore();
-
-      // 5. Connective Crumb Particles & Steel Fibers
-      ctx.lineWidth = 0.8;
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.angle += p.speed;
-        let targetX = cx + Math.cos(p.angle) * p.distFromCenter;
-        let targetY = cy + Math.sin(p.angle) * p.distFromCenter;
-
-        // If user is actively pressing, particles rush toward the center press core!
-        if (isUserPressing) {
-          const attraction = compressionProgress * 0.45;
-          targetX = targetX * (1 - attraction) + cx * attraction;
-          targetY = targetY * (1 - attraction) + cy * attraction;
-        }
-
-        p.x += (targetX - p.x) * 0.08;
-        p.y += (targetY - p.y) * 0.08;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
+        ctx.roundRect(-60, 2, 120, 12, 3);
         ctx.fill();
+        ctx.stroke();
 
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j];
-          const dx = p.x - p2.x;
-          const dy = p.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+        // 3 Support blocks under pallet deck
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.5;
+        // Left block
+        ctx.fillRect(-55, 14, 25, 14);
+        ctx.strokeRect(-55, 14, 25, 14);
+        // Center block
+        ctx.fillRect(-12, 14, 24, 14);
+        ctx.strokeRect(-12, 14, 24, 14);
+        // Right block
+        ctx.fillRect(30, 14, 25, 14);
+        ctx.strokeRect(30, 14, 25, 14);
 
-          if (dist < 60) {
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = p.isSteel || p2.isSteel
-              ? `rgba(56, 189, 248, ${0.35 * (1 - dist / 60)})`
-              : `rgba(16, 185, 129, ${0.25 * (1 - dist / 60)})`;
-            ctx.stroke();
-          }
-        }
+        // Integrated steel reinforcement strip (glowing silver)
+        ctx.fillStyle = '#f8fafc';
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 8;
+        ctx.fillRect(-45, 6, 90, 4);
+
+        // Quality Stamp MAG
+        ctx.fillStyle = '#34d399';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('MAG BLOCK ★ 6.5T', 0, 24);
+
+        ctx.restore();
       }
 
-      // 6. Draw Sparks
-      for (let i = sparks.length - 1; i >= 0; i--) {
-        const s = sparks[i];
+      ctx.restore();
+
+      // 5. Draw Venting Steam Clouds
+      for (let i = steamList.length - 1; i >= 0; i--) {
+        const s = steamList[i];
         s.x += s.vx;
         s.y += s.vy;
-        s.vy += 0.15; // gravity
+        s.radius += 0.35;
         s.alpha *= 0.94;
-        s.life -= 1;
 
-        ctx.fillStyle = s.color;
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.4)';
         ctx.globalAlpha = Math.max(0, s.alpha);
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1.0;
 
-        if (s.life <= 0 || s.alpha < 0.05) {
-          sparks.splice(i, 1);
-        }
+        if (s.alpha <= 0.02) steamList.splice(i, 1);
       }
 
-      // 7. Draw Steam Clouds
-      for (let i = steamClouds.length - 1; i >= 0; i--) {
-        const st = steamClouds[i];
-        st.x += st.vx;
-        st.y += st.vy;
-        st.radius += 0.45;
-        st.alpha *= 0.95;
-
-        ctx.fillStyle = 'rgba(241, 245, 249, 0.45)';
-        ctx.globalAlpha = Math.max(0, st.alpha);
-        ctx.beginPath();
-        ctx.arc(st.x, st.y, st.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1.0;
-
-        if (st.alpha < 0.02) {
-          steamClouds.splice(i, 1);
-        }
-      }
-
-      // 8. Real-time Industrial HUD Telemetry Overlay on Canvas
+      // 6. HUD Telemetry Bar at bottom of canvas
       ctx.save();
-      const hudY = height - 55;
-      const hudX = 24;
+      const hudY = height - 52;
+      const hudX = 20;
 
-      // Dynamic tonnage calculation based on compressionProgress
-      const currentTonnage = Math.round(compressionProgress * 500);
-
-      // Telemetry badge 1: Dynamic Pressure
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.strokeStyle = hasTriggeredImpact
-        ? 'rgba(52, 211, 153, 0.9)'
-        : isUserPressing
-        ? 'rgba(56, 189, 248, 0.8)'
-        : 'rgba(51, 65, 85, 0.6)';
-      ctx.lineWidth = hasTriggeredImpact ? 2 : 1;
+      // Status pill
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.strokeStyle = currentStage === 'VULCANIZING' ? '#f59e0b' : currentStage === 'FINISHED' ? '#10b981' : '#334155';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(hudX, hudY, 160, 38, 8);
+      ctx.roundRect(hudX, hudY, 175, 36, 8);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = hasTriggeredImpact ? '#34d399' : isUserPressing ? '#38bdf8' : '#10b981';
+      ctx.fillStyle = currentStage === 'VULCANIZING' ? '#f59e0b' : currentStage === 'FINISHED' ? '#34d399' : '#10b981';
       ctx.beginPath();
-      ctx.arc(hudX + 16, hudY + 19, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = hasTriggeredImpact ? '#34d399' : '#ffffff';
-      ctx.font = 'bold 12px system-ui';
-      ctx.textAlign = 'left';
-      ctx.fillText(`ТИСК: ${currentTonnage} Т / 500 Т`, hudX + 28, hudY + 16);
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '10px monospace';
-      ctx.fillText(
-        hasTriggeredImpact
-          ? 'СТАН: МОНОЛІТ ГОТОВИЙ'
-          : isUserPressing
-          ? 'СТАН: ПРЕСУВАННЯ...'
-          : 'СТАН: ОЧІКУВАННЯ',
-        hudX + 28,
-        hudY + 29
-      );
-
-      // Telemetry badge 2: Cycles counter
-      const hud2X = hudX + 175;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.strokeStyle = 'rgba(51, 65, 85, 0.6)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(hud2X, hudY, 150, 38, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(hud2X + 16, hudY + 19, 4, 0, Math.PI * 2);
+      ctx.arc(hudX + 16, hudY + 18, 4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 11px system-ui';
-      ctx.fillText(`ЦИКЛІВ: ${pressedCount}`, hud2X + 28, hudY + 16);
+      ctx.textAlign = 'left';
+      ctx.fillText(`ТИСК: ${tonnageRef.current} Т / 500 Т`, hudX + 28, hudY + 15);
+
       ctx.fillStyle = '#94a3b8';
       ctx.font = '10px monospace';
-      ctx.fillText('ТЕМП: 165°C ГАРЯЧЕ', hud2X + 28, hudY + 29);
+      ctx.fillText(
+        currentStage === 'IDLE'
+          ? 'СТАН: ГОТОВИЙ ДО ЗАПУСКУ'
+          : currentStage === 'COMPRESSING'
+          ? 'СТАН: ОПУСКАННЯ ПРЕСА...'
+          : currentStage === 'VULCANIZING'
+          ? `ВУЛКАНІЗАЦІЯ 165°C: ${progressRef.current}%`
+          : 'СТАН: ВИРІБ СФОРМОВАНО',
+        hudX + 28,
+        hudY + 28
+      );
 
       ctx.restore();
-      ctx.restore(); // end shake
 
       animationFrameId = requestAnimationFrame(render);
     };
@@ -577,58 +541,149 @@ export const IndustrialHeroCanvas: React.FC = () => {
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
-      canvas.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('mouseleave', onMouseLeave);
-
-      canvas.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [pressedCount]);
+  }, []);
 
   return (
-    <div className="relative w-full h-full min-h-[460px] lg:min-h-[590px] flex items-center justify-center overflow-hidden select-none">
+    <div className="relative w-full h-full min-h-[480px] lg:min-h-[600px] flex items-center justify-center overflow-hidden select-none">
       {/* Interactive Canvas */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full block cursor-grab active:cursor-grabbing touch-none"
-      />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" />
 
-      {/* Floating Interactive Call to Action Banner on Top */}
-      <div className="absolute top-4 right-4 z-20 pointer-events-none">
-        <div
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md transition-all duration-300 shadow-xl border ${
-            hintText === 'struck'
-              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-400 scale-105 shadow-emerald-500/20'
-              : hintText === 'pressing'
-              ? 'bg-blue-950/90 text-cyan-300 border-cyan-400 scale-100 shadow-cyan-500/20'
-              : 'bg-slate-900/85 text-slate-200 border-emerald-500/40 hover:border-emerald-400'
-          }`}
+      {/* Top Sound Toggle Button */}
+      <div className="absolute top-4 left-4 z-20">
+        <button
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs backdrop-blur-md"
+          title={soundEnabled ? 'Вимкнути звук' : 'Увімкнути звук'}
         >
-          <span className="relative flex h-2 w-2">
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                hintText === 'struck' ? 'bg-emerald-400' : 'bg-emerald-400'
-              }`}
-            />
-            <span
-              className={`relative inline-flex rounded-full h-2 w-2 ${
-                hintText === 'struck' ? 'bg-emerald-400' : 'bg-emerald-400'
-              }`}
-            />
-          </span>
+          {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+          <span className="text-[10px] hidden sm:inline">{soundEnabled ? 'Звук: Увімкнено' : 'Звук: Вимкнено'}</span>
+        </button>
+      </div>
 
-          <span>
-            {hintText === 'struck'
-              ? '💥 500 ТОНН! ВИРІБ СФОРМОВАНО'
-              : hintText === 'pressing'
-              ? '⚡ ТИСНІТЬ / ТЯГНІТЬ ДО 500 ТОНН'
-              : '👆 ЗАТИСНІТЬ ПРЕС ДЛЯ ЗАПУСКУ'}
+      {/* 1. IDLE STATE: PROMINENT INDUSTRIAL ACTION BUTTON */}
+      {stage === 'IDLE' && (
+        <div className="absolute bottom-16 sm:bottom-12 z-20 flex flex-col items-center gap-2 animate-in fade-in duration-300">
+          <button
+            onClick={handleStartPressing}
+            className="group relative px-7 py-4 rounded-2xl font-black font-heading tracking-wider uppercase text-xs sm:text-sm text-black bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-emerald-500/40 flex items-center gap-3 border-2 border-emerald-300 cursor-pointer"
+          >
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-950 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-black" />
+            </span>
+            <span>⚡ Запустити пресування 500 тонн</span>
+            <Play className="w-4 h-4 fill-black" />
+          </button>
+          <span className="text-[11px] font-medium text-slate-400 bg-slate-950/80 px-3 py-1 rounded-full border border-slate-800 backdrop-blur-md">
+            Натисніть для запуску повного циклу виготовлення палети
           </span>
         </div>
-      </div>
+      )}
+
+      {/* 2. COMPRESSING & VULCANIZING OVERLAY: REAL PROCESS WITH PROGRESS */}
+      {(stage === 'COMPRESSING' || stage === 'VULCANIZING') && (
+        <div className="absolute bottom-16 sm:bottom-12 z-20 max-w-sm w-full px-4 animate-in fade-in duration-200">
+          <div className="bg-slate-950/90 border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-white flex items-center gap-1.5">
+                {stage === 'COMPRESSING' ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                    <span className="text-cyan-400">Опускання гідравлічного поршня...</span>
+                  </>
+                ) : (
+                  <>
+                    <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
+                    <span className="text-amber-400">Гаряча вулканізація (165°C / 500Т)</span>
+                  </>
+                )}
+              </span>
+              <span className="text-white font-mono">{progress}%</span>
+            </div>
+
+            {/* Industrial Progress Bar */}
+            <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
+              <div
+                className={`h-full rounded-full transition-all duration-150 ${
+                  stage === 'COMPRESSING'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500'
+                    : 'bg-gradient-to-r from-amber-500 via-emerald-400 to-emerald-300'
+                }`}
+                style={{ width: `${stage === 'COMPRESSING' ? (tonnage / 500) * 100 : progress}%` }}
+              />
+            </div>
+
+            <p className="text-[11px] text-slate-400 text-center font-mono">
+              {stage === 'COMPRESSING' ? 'Формування геометрії прес-форми...' : 'Спікання гумового масиву зі сталевим армуванням...'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 3. FINISHED STATE: CELEBRATION & PRODUCT CARD */}
+      {stage === 'FINISHED' && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl shadow-emerald-500/20 space-y-5 text-center relative overflow-hidden">
+            {/* Top Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Виріб успішно спресовано!</span>
+            </div>
+
+            {/* Product Snapshot */}
+            <div className="space-y-2">
+              <div className="w-20 h-20 rounded-2xl bg-slate-950 border border-slate-800 mx-auto overflow-hidden shadow-inner flex items-center justify-center">
+                <img
+                  src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=300&q=80"
+                  alt="Спресована палета"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <h3 className="text-lg font-bold font-heading text-white">
+                Блочна гумова палета MAG Heavy Block
+              </h3>
+
+              {/* Specs chips */}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <span className="text-[11px] bg-slate-950 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-850 font-mono">
+                  Вага: 48 кг
+                </span>
+                <span className="text-[11px] bg-emerald-950/60 text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-500/30 font-bold">
+                  Навантаження: 6 500 кг
+                </span>
+                <span className="text-[11px] bg-slate-950 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-850 font-mono">
+                  Сталевий пояс 4 мм
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Монолітна структура без внутрішніх пустот сформована під зусиллям 500 тонн. Повністю стійка до солей, мастил та ударів.
+            </p>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <Link
+                to="/catalog/paleta-blochna-gumova-mag-heavy-block-1200x800"
+                className="flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs text-black bg-emerald-400 hover:bg-emerald-300 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+              >
+                <span>Товар у каталозі</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+
+              <button
+                onClick={handleReset}
+                className="py-3 px-4 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Спресувати ще раз</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
