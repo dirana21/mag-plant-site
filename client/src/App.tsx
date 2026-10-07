@@ -13,6 +13,7 @@ import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { api } from './services/api';
 
 // Helper component to scroll to top on page navigation
 function ScrollToTop() {
@@ -28,6 +29,10 @@ export default function App() {
   const [quoteProductName, setQuoteProductName] = useState('');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const location = useLocation();
+
+  useEffect(() => {
+    api.initStorage();
+  }, []);
 
   const isAdminRoute = location.pathname.startsWith('/admin');
 

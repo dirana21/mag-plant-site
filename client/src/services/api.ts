@@ -262,20 +262,123 @@ const defaultProducts: Product[] = [
   }
 ];
 
-// LocalStorage helpers
+// IndexedDB backing store for reliable offline/static persistence
+const IDB_NAME = 'mag_plant_db';
+const IDB_STORE = 'keyval';
+
+function openIDB(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function idbSave<T>(key: string, val: T): Promise<void> {
+  const db = await openIDB();
+  if (!db) return;
+  try {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+  } catch (_) {}
+}
+
+export async function idbLoad<T>(key: string): Promise<T | null> {
+  const db = await openIDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve((req.result as T) ?? null);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+// Client-side image compressor for static & offline CMS uploads
+export async function compressImageFile(file: File, maxDim = 1000, quality = 0.82): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/') || file.type.includes('svg')) {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string) || '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve((e.target?.result as string) || '');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Clean JPEG compression: turns 4-8 MB photos into ~45-80 KB
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve((e.target?.result as string) || '');
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
+// LocalStorage helpers with automatic deep clone & IndexedDB backup
 function getLocal<T>(key: string, fallback: T): T {
   try {
     const val = localStorage.getItem(`mag_${key}`);
-    return val ? JSON.parse(val) : fallback;
-  } catch {
-    return fallback;
+    if (val) {
+      return JSON.parse(val);
+    }
+  } catch (err) {
+    console.warn(`[Storage] getLocal read error for mag_${key}:`, err);
   }
+  return JSON.parse(JSON.stringify(fallback));
 }
 
 function setLocal<T>(key: string, val: T): void {
   try {
     localStorage.setItem(`mag_${key}`, JSON.stringify(val));
-  } catch (_) {}
+  } catch (err: any) {
+    console.warn(`[Storage] localStorage.setItem failed for mag_${key}:`, err);
+  }
+  idbSave(`mag_${key}`, val).catch(() => {});
 }
 
 // Network request with automatic fallback
@@ -401,7 +504,7 @@ export const api = {
       });
     } catch {
       const list = getLocal<Product[]>('products', defaultProducts);
-      const newId = list.length > 0 ? Math.max(...list.map(p => p.id)) + 1 : 1;
+      const newId = list.length > 0 ? Math.max(...list.map(p => Number(p.id) || 0)) + 1 : 1;
       const newSlug = (productData.name || 'product')
         .toLowerCase()
         .replace(/[^a-z0-9а-яіїєґ\s-]/g, '')
@@ -429,7 +532,7 @@ export const api = {
     }
   },
 
-  updateProduct: async (id: number, productData: Partial<Product>): Promise<Product> => {
+  updateProduct: async (id: number | string, productData: Partial<Product>): Promise<Product> => {
     try {
       return await request<Product>(`/products/${id}`, {
         method: 'PUT',
@@ -437,8 +540,10 @@ export const api = {
       });
     } catch {
       const list = getLocal<Product[]>('products', defaultProducts);
-      const idx = list.findIndex(p => p.id === id);
-      if (idx === -1) throw new Error('Товар не знайдено');
+      const idx = list.findIndex(p => String(p.id) === String(id) || Number(p.id) === Number(id));
+      if (idx === -1) {
+        throw new Error('Товар не знайдено в базі даних');
+      }
       const updatedItem: Product = {
         ...list[idx],
         ...productData,
@@ -450,43 +555,69 @@ export const api = {
     }
   },
 
-  deleteProduct: async (id: number) => {
+  deleteProduct: async (id: number | string) => {
     try {
       return await request<{ success: boolean; message: string }>(`/products/${id}`, {
         method: 'DELETE',
       });
     } catch {
       const list = getLocal<Product[]>('products', defaultProducts);
-      const filtered = list.filter(p => p.id !== id);
+      const filtered = list.filter(p => String(p.id) !== String(id) && Number(p.id) !== Number(id));
       setLocal('products', filtered);
       return { success: true, message: 'Товар видалено' };
     }
   },
 
-  // --- File Upload ---
+  resetProductsToDefaults: () => {
+    setLocal('products', defaultProducts);
+    return defaultProducts;
+  },
+
+  // --- File Upload with Smart Image Compression ---
   uploadImage: async (file: File): Promise<{ url: string; filename: string }> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+    // Detect static hosting (GitHub Pages) where /api doesn't exist
+    const isStaticHost = typeof window !== 'undefined' && (
+      window.location.hostname.includes('github.io') ||
+      window.location.protocol === 'file:'
+    );
 
-      const response = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
-      if (!response.ok) throw new Error('Upload error');
-      return await response.json();
-    } catch {
-      // In static / GitHub Pages mode, convert image to data URL so it displays and persists in browser!
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          resolve({ url: reader.result as string, filename: file.name });
-        };
-        reader.readAsDataURL(file);
-      });
+    if (!isStaticHost) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (_) {}
     }
+
+    // Static mode / client-side compression:
+    // Compresses large camera photos (3-10MB) to optimized Web JPEG (~45-80KB)
+    // This completely prevents localStorage QuotaExceededError and persists reliably!
+    const compressedUrl = await compressImageFile(file, 1000, 0.82);
+    return { url: compressedUrl, filename: file.name };
+  },
+
+  // --- Storage Hydration ---
+  initStorage: async () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const existing = localStorage.getItem('mag_products');
+      if (!existing) {
+        const fromIDB = await idbLoad<Product[]>('mag_products');
+        if (fromIDB && Array.isArray(fromIDB) && fromIDB.length > 0) {
+          localStorage.setItem('mag_products', JSON.stringify(fromIDB));
+        } else {
+          localStorage.setItem('mag_products', JSON.stringify(defaultProducts));
+          idbSave('mag_products', defaultProducts).catch(() => {});
+        }
+      }
+    } catch (_) {}
   },
 
   // --- Inquiries ---

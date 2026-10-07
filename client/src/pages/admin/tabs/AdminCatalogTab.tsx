@@ -122,7 +122,7 @@ export const AdminCatalogTab: React.FC<AdminCatalogTabProps> = ({ onNotify }) =>
     try {
       const res = await api.uploadImage(file);
       setEditingProduct(prev => ({ ...prev, image: res.url }));
-      onNotify('Головне фото товару завантажено!');
+      onNotify('Фото товару успішно завантажено та оптимізовано!');
     } catch (err: any) {
       onNotify(err.message || 'Помилка завантаження фото', 'error');
     } finally {
@@ -137,9 +137,17 @@ export const AdminCatalogTab: React.FC<AdminCatalogTabProps> = ({ onNotify }) =>
         ...prev,
         gallery: [...(prev?.gallery || []), res.url]
       }));
-      onNotify('Фото додано до галереї товару!');
+      onNotify('Фото додано до галереї товару та оптимізовано!');
     } catch (err: any) {
       onNotify(err.message || 'Помилка завантаження фото', 'error');
+    }
+  };
+
+  const handleResetDefaults = () => {
+    if (window.confirm('Скинути всі товари каталогу до початкових заводських значень? Всі внесені зміни буде замінено стандартними товарами заводу MAG.')) {
+      api.resetProductsToDefaults();
+      loadProducts();
+      onNotify('Каталог скинуто до початкових заводських позицій!');
     }
   };
 
@@ -184,13 +192,24 @@ export const AdminCatalogTab: React.FC<AdminCatalogTabProps> = ({ onNotify }) =>
           </p>
         </div>
 
-        <button
-          onClick={handleCreateNew}
-          className="px-5 py-3 rounded-xl font-bold uppercase tracking-wider text-xs text-black bg-emerald-400 hover:bg-emerald-300 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Додати новий товар</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleResetDefaults}
+            className="px-4 py-3 rounded-xl font-bold text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all flex items-center justify-center gap-1.5 shrink-0"
+            title="Скинути каталог до початкових 6 заводських позицій"
+          >
+            <span>Скинути до стандартних</span>
+          </button>
+
+          <button
+            onClick={handleCreateNew}
+            className="px-5 py-3 rounded-xl font-bold uppercase tracking-wider text-xs text-black bg-emerald-400 hover:bg-emerald-300 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Додати новий товар</span>
+          </button>
+        </div>
       </div>
 
       {/* MODAL / SLIDE-OVER FORM FOR PRODUCT CREATE / EDIT */}

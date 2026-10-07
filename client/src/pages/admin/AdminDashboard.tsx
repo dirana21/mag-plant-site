@@ -93,7 +93,7 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="flex items-center gap-4">
             <a
-              href="/"
+              href="#/"
               target="_blank"
               rel="noreferrer"
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs border border-slate-800 transition-colors"
